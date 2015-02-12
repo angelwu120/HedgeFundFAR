@@ -1,0 +1,10 @@
+--Initiative inputs:
+
+i = 1:60   --months
+j = 1:5    --years/series
+NAV(0) = 100   --NAV
+sub = 10000  --contribution
+m = 1%     --management fee rate
+n = 20%     --incentive fee rate
+t = 0%     --tax rate
+r(i)    --rate of return for each month
