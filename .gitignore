@@ -1,10 +1,264 @@
---Initiative inputs:
 
-i = 1:60   --months
-j = 1:5    --years/series
-NAV(0) = 100   --NAV
-sub = 10000  --contribution
-m = 1%     --management fee rate
+{Initial Inputs}
+
+i = 1 : 12  --months
+j = inf     --years
+k = 1:K     --series
+K = j
+
+m = 0%
 n = 20%     --incentive fee rate
-t = 0%     --tax rate
-r(i)    --rate of return for each month
+r(i,j)      --rate of return for month i, year j
+
+
+
+{Assumptions}
+
+1. Growth grants annually (in the beginning of each year)
+
+
+2. adjIndex = [1, 2, 3, 4]       --adjustment ways of strike price
+
+    adjIndex = 1;    --adjusted by rate of return r(i,j)
+    adjIndex = 2;    --adjusted by market index d(i,j)
+    adjIndex = 3;    --fix rate x(constant)
+    adjIndex = 4;    --mf 
+
+
+3. redeemIndex(i,j) = [0, 1, 2, 3]    --redemption ways
+
+    redeemIndex(i,j) = 0;    --no redemption
+    redeemIndex(i,j) = 1;    --redeem from both common shares and restriced shares
+    redeemIndex(i,j) = 2;    --redeem from common shares
+    redeemIndex(i,j) = 3;    --redeem from restricted shares
+
+
+4. vexeIndex(i,j) = [0,1]    --voluntary exercise or not
+
+
+5. mexeIndex(i,j) = [0,1]     --Mandatory exercise or not 
+
+
+{Outputs}
+
+1. Common shares
+
+ 1) VCS(i,j) = cNAV(i,j) * cs(i,j)     -value of common shares as of month i, year j
+     
+     where: cNAV(i,j) = F_cNAV(NAV(12,0), r(i,j) , MF(i,j))     --common share NAV as of month i, year j
+            cs(i,j) = F_cs(cs(12,0), redeemCS(i,j), cancelCS(i,j), issueCS(i,j))      --number of common shares as of month i, year j
+                      
+
+
+2. Restricted shares
+
+ 1) vrs(i,j,k) = rs(i,j,k) * MIN(rNAV(i,j,k), maxNAV(i,j,k))       --value of restricted shares k for month i, year j
+
+      where: rNAV(i,j,k) = F_rNAV() = VUS(i,j,k)          --NAV of restricted share j as of month i, which equals to FAR's VUS
+             maxNAV(i,j,k) = F_maxNAV() = K(i,j,k)   
+             rs(i,j,k) = F_rs(ra(12,0), growthRS(i,j,k), redeemRS(i,j,k), cancelRS(i,j,k), issueRS(i,j,k))            --number of restricted shares for series k 
+
+ 2) VRS(i,j) = sigma(k=1:k, vrs(i,j,k))       --total value of restricted shares for month i, year j
+
+
+3. FARs
+
+ 1) s(i,j,k) = MAX(VUS(i,j,) - SP(i,j,k),0) * f(i,j,k)     --aggregated value of FAR k for month i
+
+      where: VUS(i,j,) = F_VUS(NAV(12,0), r(i,j))          --VUS as of month i, year j
+             SP(i,j,k) = F_SP(NAV(12,0),VUS(12,k-1), phi(i,j))            --strike pice of FAR k as of month i, year j            
+                        where: phi(i,j) = F_adjust(adjIndex(i,j))        --strike price adjustments
+             f(i,j,k) = F_f(f(12,0,1), growthFAR(i,j,k), exFAR(i,j,k))       --number of contribution (k=1) or growth (k>1) FARs for series k
+                       
+
+ 2) S(i,j) = sigma (k=1:K, s(i,j,k))         --total value of FARs for month i, year j
+
+
+{Breakdowns}
+
+
+1. NAV(i,j), cNAV(i,j), rNAV(i,j,k), VUS(i,j,k)
+
+[NAV(i,j), cNAV(i,j), VUS(i,j,k), rNAV(i,j,k)] = F_NAV(NAV(12,0), r(i,j)) {
+
+j=0
+while plan not stops
+   j = j + 1
+   NAV(0,j) = NAV(12,j-1)
+   for i = 1 : 12
+       NAV(i,j) = NAV(i-1,j) * r(i,j)
+       cNAV(i,j) = NAV(i,j) - MF(i,j)
+       for k = j : K
+           VUS(i,j,k) = NAV(i,j)
+           rNAV(i,j,k) = NAV(i,j)
+       end
+   end
+end
+}
+
+
+
+2. [SP(i,j,k), maxNAV(i,j,k)] = F_StrikePrice(adjIndex(i,j),VUS(1,j,k))
+
+j = 0
+while not terminate the plan
+
+j = j + 1
+for i = 1:12
+if adjIndex(i,j) = 1
+   phi(i,j) = r(i,j)
+   else if adjIndex(i,j) = 2
+     phi(i,j) = d(i,j)
+   else if adjIndex(i,j) = 3
+       phi(i,j) = x
+   else if
+       phi(i,j) = F_mfAdj(i,j)    --adjusted by management fee
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+{Module 1 - Contribution}
+
+[cs(12,0), rs(12,0,1), f(12,0,1)] = F_Contribution(sub, NAV(12,0)) {
+
+shares = sub  / NAV(12,0)       --total shares for investors
+
+cs(12,0) = shares * (1-n) 
+rs(12,0,1) = shares * n
+f(12,0,1) = shares * n
+
+}
+
+
+
+{Module 2 - Growth Grants}
+
+[cancelCS(i,j), growthRS(i,j,K), growthFAR(i,j,K)] = F_GrowthGrants() {
+
+j = 0
+while not terminate the plan
+j = j + 1
+
+ for i = 1:12
+    if i = 1
+       K = K + 1
+       cancelCS(i,j) = MAX(cNAV(i,j)*(cs(12,j-1)-redeemCS(i,j)) - MAX(VCS(1,1:j-1)) + sigma(k=1:K-1, MIN(rNAV(i,j,K),maxNAV(i,j,K))*(rs(12,j-1,k-1) - redeemRS(i,j,k))) - MAX(VRS(1,1:j-1)), 0) * n / cNAV(i,j)       --cancellation of common shares
+       growthRS(i,j,K) = MAX(cNAV(i,j)*(cs(12,j-1)-redeemCS(i,j)) - MAX(VCS(1,1:j-1)) + sigma(k=1:K-1, MIN(rNAV(i,j,K),maxNAV(i,j,K))*(rs(12,j-1,k-1) - redeemRS(i,j,k))) - MAX(VRS(1,1:j-1)), 0) * n / rNAV(i,j,k)       --issuance of restricted shares
+       growthFAR(i,j,K) = MAX(cNAV(i,j)*(cs(12,j-1)-redeemCS(i,j)) - MAX(VCS(1,1:j-1)) + sigma(k=1:K-1, MIN(rNAV(i,j,K),maxNAV(i,j,K))*(rs(12,j-1,k-1) - redeemRS(i,j,k))) - MAX(VRS(1,1:j-1)), 0) * n / VUS(i,j,k)       --growth grants of FAR
+     else 
+       cancelCS(i,j) = c(i-1,j)
+       growthRS(i,j,K) = growthRS(i-1,j,K)
+       growthFAR(i,j,K) = growthFAR(i,j,K)
+   end
+ end
+end
+
+}   
+
+
+
+{Module 3 - Redeption}
+
+
+[redeemCS(i,j), redeemRS(i,j,k)] = F_redeem([redemption amount], redeemIndex(i,j), vrs(i,j,k), VRS(i,j), VCS(i,j)) {
+
+if redeemIndex(i,j) = 0
+   redeemCS(i,j) = 0
+   redeemRS(i,j,k) = 0
+  else if redeemIndex(i,j) = 1
+          redeemCS(i,j) = [redemption amount] / (VCS(i,j) + VRS(i,j)) * VCS(i,j) 
+          redeemRS(i,j,k) = [redemption amount] / (VCS(i,j) + VRS(i,j))  * VRS(i,j,k) 
+      else if redeemIndex(i,j) = 2
+              redeemCS(i,j) = [redemption amount] / VCS(i,j)
+              redeemRS(i,j,k) = 0
+         else if redeemIndex(i,j) = 3
+                 redeemCS(i,j) = 0
+                 redeemRS(i,j,k) = [redemption amount] / VRS(i,j)  * VRS(i,j,k) 
+         end
+       end
+   end
+end
+
+}
+
+
+
+{Module 4 - Excercise}
+
+
+[exFAR(i,j,k) , cancelRS (i,j,k) , issueRS(i,j,k) , issueCS (i,j)] = F_ex(vexIndex(i,j), mexIndex(i,j), exercise(i,j))  {
+
+
+if vexIndex(i,j) = 0 AND mexIndex(i,j) = 0     
+        exFAR(i,j,k) = 0
+        cancelRS (i,j,k) = 0
+        issueRS(i,j,k) = 0
+        issueCS (i,j) = 0
+  else if vexIndex(i,j) = 0 AND mexIndex(i,j) = 0
+        exFAR(i,j,k) = redeemRS(i,j,k)
+        cancelRS (i,j,k) = 0
+        issueRS(i,j,k) = 0
+        issueCS (i,j) = 0
+  else if vexIndex(i,j) = 1 AND mexIndex(i,j) = 0
+      K = K + 1
+      for k = 1 : K-1
+        exFAR(i,j,k) = exercise(i,j)/ S(i,j) * f(i,j,k)
+        cancelRS (i,j,k) = ex(i,j,k)
+        rediction(i,j) = reduction(i,j) + ex(i,j,k) * SP(i,j,k)
+      end
+      k = K
+      SP(i,j,k) = VUS(i,j,k) = VUS(i,j,k-1)
+      replaceFAR(i,j,k) = reduction(i,j) / VUS(i,j,k) 
+      maxNAV(i,j,k) = SP(i,j,k)
+      issueRS(i,j,k) = reduction(i,j) / VUS(i,j,k)
+      issueCS(i,j) = exercise(i,j) / cNAV(i,j)
+      
+  else if vexeIndex(i,j) = 1 AND mexeIndex(i,j) = 1
+      K = K + 1
+      for k = 1 : K-1
+        exFAR(i,j,k) = exercise(i,j) / S(i,j) * f(i,j,k) + redeemRS(i,j,k)
+        cancelRS (i,j,k) = ex(i,j,k)
+        rediction(i,j) = reduction(i,j) + ex(i,j,k) * SP(i,j,k)
+      end
+      SP(i,j,K) = VUS(i,j,K) = VUS(i,j,K-1)
+      replaceFAR(i,j,K) = reduction(i,j) / VUS(i,j,K) 
+      maxNAV(i,j,K) = SP(i,j,K)
+      issueRS(i,j,K) = reduction(i,j) / VUS(i,j,K)
+      issueCS(i,j) = exercise(i,j) / cNAV(i,j)
+      
+end
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
