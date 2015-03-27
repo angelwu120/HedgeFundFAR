@@ -2,66 +2,73 @@
 ##  Multi-contributions and orphaned FARs   ##
 ##############################################
 
+### STORY ###
+# The plan will be lasting 5 years. 
+# There are two contributions created separately in January and Febuary, Year 1.
+# Monthly rate of return is 10% except Febuary and March, Year 1. Theirs are 100%. 
+# The investor redeems $90 from his first contriburion in Febuary, Year 1. 
+# The manager does not exercise with the redemption, and thus some of his FARs are orphaned. 
+# All the balances and shares are in the beginning of each month. 
+# Growth grants in every January through the 5 years. 
 
-I <- 12
-J <- 5
-G <- I * J
 
-n <- 0.2
+### INPUTS ###
+I <- 12   # 12 months
+J <- 5    # 5 years
+G <- I * J  # total months in 5 years
 
-r <- array(0.1:0.1, c(I,J))   #IV
-r[2,1] <- 1
-r[3,1] <- 1
+n <- 0.2  # incentive fee rate
+
+r <- array(0.1:0.1, c(I,J))   # r[month, year]: rate of return for each month
+r[2,1] <- 1  
+r[3,1] <- 1   
 
 ## Parameters for Exercise and Redemption ##
 
-#adjIndex <- 1:4  
+redeemIndex <- array(0:0,c(I,J,2))    # redeemIndex[month,year,contributionID]: redeem methods
+redeemIndex[2,1,1] <- 1               # redemIndex = [0: no redemprion, 1: redeem from common shares and restricted shares,
+                                      #               2: redeem from common shares, 3: redeem from restricted shares]        
+mexIndex <- array(0:0, c(I,J,2))      # mexIndex[month,year,contributionID]: whether exercise if investor redeems
 
-redeemS <- array(0:0,c(I,J,2))
-redeemIndex <- array(0:0,c(I,J,2))    # redeemIndex[i,j,h]
-redeemIndex[2,1,1] <- 1
-#vexIndex <- array(0:0,c(I,J,2))      # vexIndex[i,j,h]
-mexIndex <- array(0:0, c(I,J,2))      # mexIndex[i,j,h]
-
-#exercise <- array(0:0, c(I,J,2))     # exercise[i,j,h]
-redeem <- array(0:0, c(I,J,2))        # redeem[i,j,h]
-redeem[2,1,1] <- 90
+redeem <- array(0:0, c(I,J,2))        # redeem[year, month, contributionID]: redemption amount
+redeem[2,1,1] <- 90                   # redeem $90 in month 2, year 1
+redeemS <- array(0:0,c(I,J,2))        # redeemS[month, year, contributionID]: total number of shares redeemed
 
 ## Declare Initials -- FLAG >>
-j <- 1
-K <- array(1:1,c(2))             # K[H]
-H <- 0  # contributions
-L <- 0  # orphaned FARs
+j <- 1  # cursor for years
+H <- 0  # MAX(contributionID)
+K <- array(1:1,c(2))  # K[contributionID]: MAX(sub_trancheID)
+L <- 0  # MAX(orphaned_FARsID)
 
-NAV <- array(0:0, c(I,J))        # NAV[i,j]
-shares <- array(0:0, c(I,J))     # shares[i,j]
+NAV <- array(0:0, c(I,J))        # NAV[month,year]: NAV, assume NAV = VUS
+shares <- array(0:0, c(I,J))     # shares[month,year]: total shares for investor
 
-sub <- array(0:0, c(I,J))
-sub[1,1] <- 100
-sub[2,1] <- 40
+sub <- array(0:0, c(I,J))        # sub[month, year]: contribution amount
+sub[1,1] <- 100                  # $100 of contribution in Jan, year 1
+sub[2,1] <- 40                   # $40 of contribution in Feb, year 1
 
-VRS <- array(0:0, c(I,J,2))      # VRS[i,j,h]
-vrs <- array(0:0,c(I,J,J,2))     # vrs[i,j,k[h],h]
-VCS <- array(0:0, c(I,J,2))      # VCS[i,j,h]
-S <- array(0:0, c(I,J,2))        # S[i,j,h]
-s <- array(0:0, c(I,J,J,2))      # s[i,j,k[h],h]
-SS <- array(0:0,c(I,J))          # ss[I,J]
+VRS <- array(0:0, c(I,J,2))      # VRS[month,year,contributionID]: total value of restricted shares of all sub_tranches by difference CcontributionIDs   
+vrs <- array(0:0,c(I,J,J,2))     # vrs[month,year,trancheID,contributionID]: value of restricted shares by difference sub_tranches and contributions
+VCS <- array(0:0, c(I,J,2))      # VCS[month, year, contributionID]: Value of common shares by contributionIDs
+S <- array(0:0, c(I,J,2))        # S[month, year, contributionID]: sub total of spread by contributionIDs
+s <- array(0:0, c(I,J,J,2))      # s[month,year,trancheID,contributionID]: aggregated spread by contributionIDs and trancheIDs
+SS <- array(0:0,c(I,J))          # ss[month, year]: Total value of spread
 
-cs <- array(0:0, c(I,J,2))       # cs[i,j,h]
-rs <- array(0:0, c(I,J,J,2))     # rs[i,j,k[h],h]
-maxNAV <- array(0:0, c(I,J,J,2)) # maxNAV[i,j,k[h],h]
+cs <- array(0:0, c(I,J,2))       # cs[month, year, contributionID]: number of common shares by contributionID
+rs <- array(0:0, c(I,J,J,2))     # rs[month,year,trancheID,contributionID]: number of restrcted shares by contributionID and trancheID
+maxNAV <- array(0:0, c(I,J,J,2)) # maxNAV[month,year,trancheID,contributionID]: maxNAV
 
-f <- array(0:0, c(I,J,J,2))      # f[i,j,k[h],h]   
-SP <- array(0:0, c(I,J,J,2))     # SP[i,j,k[h],h]
-ASP <- array(0:0, c(I,J,J,2))
+f <- array(0:0, c(I,J,J,2))      # f[month,year,trancheID,contributionID]: number of FARs by contributionID and trancheID     
+SP <- array(0:0, c(I,J,J,2))     # SP[month,year,trancheID,contributionID]: Strike price of FARs
+ASP <- array(0:0, c(I,J,J,2))    # ASP[month,year,trancheID,contributionID]: aggregated strike price, ASP = SP * f
 
-o.f <- array(0:0, c(I,J,G))
-o.SP <- array(0:0,c(I,J,G))
-o.ASP <- array(0:0, c(I,J,G))
-o.s <- array(0:0, c(I,J,G))
-o.S <- array(0:0, c(I,J))
+o.f <- array(0:0, c(I,J,G))      # o.f[month, year, orphanID]: number of orphaned FARs by orphanID
+o.SP <- array(0:0,c(I,J,G))      # o.SP[month, year, orphanID]: unit strike price of orphaned Far by orphanID
+o.ASP <- array(0:0, c(I,J,G))    # o.ASP[month, year, orphanID]: aggregated strike price of orphaned FAR by orphanID
+o.s <- array(0:0, c(I,J,G))      # o.s[month, year, orphanID]: unit spread of orphaned FAR by orphanID
+o.S <- array(0:0, c(I,J))        # o.S[month, year]: total spread of all orphaned FARs
 
-growth <- array(0:0, c(J,2))     # growth[j,h]
+growth <- array(0:0, c(J,2))     # growth[year, contribution]: the growth of investor's assets in the end of each year: delta(VCS)+delta(VRS)
 
 
 ## START >>
